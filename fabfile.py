@@ -27,7 +27,8 @@ from fabric.decorators import hosts
 # Config setup #
 ################
 
-env.proj_app = real_project_name("mezzanine_example")
+if not hasattr(env, "proj_app"):
+    env.proj_app = real_project_name("mezzanine_example")
 
 conf = {}
 if sys.argv[0].split(os.sep)[-1] in ("fab", "fab-script.py"):
@@ -41,6 +42,7 @@ if sys.argv[0].split(os.sep)[-1] in ("fab", "fab-script.py"):
     except (ImportError, AttributeError):
         print("Aborting, no hosts defined.")
         exit()
+
 
 env.db_pass = conf.get("DB_PASS", None)
 env.admin_pass = conf.get("ADMIN_PASS", None)
@@ -69,6 +71,12 @@ env.num_workers = conf.get("NUM_WORKERS",
 env.secret_key = conf.get("SECRET_KEY", "")
 env.nevercache_key = conf.get("NEVERCACHE_KEY", "")
 
+if not env.secret_key and \
+        os.environ.get("DJANGO_SETTINGS_MODULE", "") != "docs_settings":
+    print("Aborting, no SECRET_KEY setting defined.")
+    exit()
+
+
 # Remote git repos need to be "bare" and reside separated from the project
 if env.deploy_tool == "git":
     env.repo_path = "/home/%s/git/%s.git" % (env.user, env.proj_name)
@@ -88,7 +96,7 @@ templates = {
     "nginx": {
         "local_path": "deploy/nginx.conf.template",
         "remote_path": "/etc/nginx/sites-enabled/%(proj_name)s.conf",
-        "reload_command": "service nginx restart",
+        "reload_command": "nginx -t && service nginx restart",
     },
     "supervisor": {
         "local_path": "deploy/supervisor.conf.template",
@@ -437,6 +445,7 @@ def install():
     sudo("apt-get update -y -q")
     apt("nginx libjpeg-dev python-dev python-setuptools git-core "
         "postgresql libpq-dev memcached supervisor python-pip")
+    apt('gcc rsync')
     run("mkdir -p /home/%s/logs" % env.user)
 
     # Install Python requirements
